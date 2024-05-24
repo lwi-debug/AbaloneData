@@ -1,41 +1,41 @@
 import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 # Load the data
-data_path = "abalone_data.csv"  # Replace with your actual data file path
+data_path = "abalone_data.csv"
 abalone_data = pd.read_csv(data_path)
 
-# Exclude the 'Sex' column
+# Exclude the 'Sex' column and prepare for PCA
 abalone_data_numeric = abalone_data.drop(columns=['Sex'])
 
 # Standardize the data
 scaler = StandardScaler()
 abalone_scaled = scaler.fit_transform(abalone_data_numeric)
 
-# Initialize PCA
-pca = PCA(n_components=2)  # We focus on the first two principal components
-
-# Perform PCA
+# Initialize and perform PCA
+pca = PCA(n_components=2)
 principal_components = pca.fit_transform(abalone_scaled)
 
 # Create a DataFrame with the principal components
 pc_df = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
 
-# Analyze the PCA output
-print("Explained variance by component:", pca.explained_variance_ratio_)
+# Add 'Whole weight' and 'Diameter' back for coloring and sizing
+pc_df['Whole weight'] = abalone_data['Whole weight']
+pc_df['Diameter'] = abalone_data['Diameter']
 
-# Loadings of the first two principal components
-loadings = pca.components_.T
-loading_matrix = pd.DataFrame(loadings, columns=['PC1', 'PC2'], index=abalone_data_numeric.columns)
-print("Loading vectors for the first two principal components:")
-print(loading_matrix)
+# Plotting with Plotly
+fig = px.scatter(pc_df, x='PC1', y='PC2',
+                 color='Whole weight',
+                 size='Diameter',
+                 color_continuous_scale=['#fcba04', '#a50104'],  # Gradient from light orange to deep red
+                 title='PCA of Abalone Dataset',
+                 labels={'PC1': 'Principal Component 1', 'PC2': 'Principal Component 2'},
+                 size_max=10)
 
-# Plotting the results (optional, for visualization)
-plt.scatter(pc_df['PC1'], pc_df['PC2'])
-plt.xlabel('Principal Component 1')
-plt.ylabel('Principal Component 2')
-plt.title('PCA of Abalone Dataset')
-plt.grid(True)
-plt.show()
+# Remove the white circle borders around points
+fig.update_traces(marker=dict(line=dict(width=0)))
+
+# Show plot
+fig.show()

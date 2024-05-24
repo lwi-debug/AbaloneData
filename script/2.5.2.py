@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 import itertools
 import statsmodels.api as sm
-import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+import plotly.graph_objects as go
 
-# Chargement des données
+# Charger les données
 data_path = 'abalone_data.csv'
 data = pd.read_csv(data_path)
 data['Age'] = data['Rings'] + 1.5  # Calcul de l'âge
@@ -22,8 +23,12 @@ def remove_outliers(df, column_list):
 numeric_cols = ['Length', 'Diameter', 'Height', 'Whole weight', 'Shucked weight', 'Viscera weight', 'Shell weight']
 data = remove_outliers(data, numeric_cols)
 
+# Standardisation des données
+scaler = StandardScaler()
+data[numeric_cols] = scaler.fit_transform(data[numeric_cols])
+
 # Définition des prédicteurs et de la variable cible après exclusion des outliers
-X = data.drop(columns=['Rings', 'Age', 'Sex'])  # Exclure les variables non numériques ou cibles
+X = data[numeric_cols]
 y = data['Age']
 
 # Fonction pour ajuster le modèle et obtenir le R² ajusté
@@ -47,21 +52,36 @@ for k in range(1, 5):
 results.sort(key=lambda x: x[1], reverse=True)
 
 # Affichage du meilleur R² pour chaque nombre de caractéristiques
-plt.figure(figsize=(10, 6))
-for k in range(1, 5):
-    best_adj_r_squared = max([r[1] for r in results if len(r[0]) == k])
-    plt.bar(k, best_adj_r_squared)
+best_combination = results[0][0]
+best_model = results[0][2]
 
-plt.xlabel('Nombre de caractéristiques')
-plt.ylabel('R² Ajusté')
-plt.title('Meilleur R² Ajusté pour Chaque Nombre de Caractéristiques')
-plt.xticks([1, 2, 3, 4])
-plt.show()
+# Afficher les résultats
+print("Meilleur modèle avec les caractéristiques:", best_combination)
+print("R² ajusté du meilleur modèle:", results[0][1])
+print(best_model.summary())
 
-# Affichage du meilleur modèle global
-best_overall = results[0]
-print("Meilleur modèle:", best_overall[0])
-print("R² ajusté du meilleur modèle:", best_overall[1])
+# Créer le graphique des coefficients
+coefficients = best_model.params[1:]  # Exclure la constante
+features = best_combination
 
-# Affichage des résultats du modèle
-print(best_overall[2].summary())
+fig = go.Figure()
+
+fig.add_trace(go.Bar(
+    x=features,
+    y=coefficients,
+    text=[f"{coef:.4f}" for coef in coefficients],
+    textposition='outside',
+    marker_color=['#F7B267', '#F79D65', '#F4845F', '#F27059'],
+    name='Coefficients'
+))
+
+# Personnaliser le graphique
+fig.update_layout(
+    title='Coefficients de la régression linéaire multiple',
+    xaxis=dict(title='Caractéristiques'),
+    yaxis=dict(title='Valeur des coefficients'),
+    showlegend=False
+)
+
+# Afficher le graphique
+fig.show()

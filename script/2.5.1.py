@@ -1,51 +1,80 @@
 import pandas as pd
 import numpy as np
-import itertools
 import statsmodels.api as sm
-import matplotlib.pyplot as plt
+from itertools import combinations
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from sklearn.preprocessing import StandardScaler  # Importation manquante
 
-# Load your data
+# Charger les données
 data_path = 'abalone_data.csv'
 data = pd.read_csv(data_path)
-data['Age'] = data['Rings'] + 1.5  # Assuming Age calculation is required
+data['Age'] = data['Rings'] + 1.5  # Calcul de l'âge à partir des anneaux
 
-# Define predictors and the response variable
-X = data.drop(columns=['Rings', 'Age', 'Sex'])  # Exclude non-numeric or target variables
-y = data['Age']
+def remove_outliers(df, column_name):
+    Q1 = df[column_name].quantile(0.25)
+    Q3 = df[column_name].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return df[(df[column_name] >= lower_bound) & (df[column_name] <= upper_bound)]
 
-# Function to fit model and get R squared
-def fit_model(X, y):
-    X = sm.add_constant(X)  # adding a constant
-    model = sm.OLS(y, X).fit()
-    return model.rsquared_adj
+# Retirer les outliers de la variable 'Shell weight'
+data = remove_outliers(data, 'Shell weight')
 
-# Store results
-results = []
+# Standardisation des données
+features = ['Length', 'Diameter', 'Height', 'Whole weight', 'Shucked weight', 'Viscera weight', 'Shell weight']
+scaler = StandardScaler()
+data[features] = scaler.fit_transform(data[features])
 
-# Generate all combinations of 1 to 4 features
+# Liste pour stocker les résultats
+results_list = []
+
+# Fonction pour calculer R² ajusté
+def adjusted_r2(r2, n, p):
+    return 1 - (1 - r2) * (n - 1) / (n - p - 1)
+
+# Tester tous les sous-ensembles possibles de caractéristiques
 for k in range(1, 5):
-    for combo in itertools.combinations(X.columns, k):
-        combo = list(combo)
-        X_subset = X[combo]
-        adj_r_squared = fit_model(X_subset, y)
-        results.append((combo, adj_r_squared))
+    for combo in combinations(features, k):
+        X = data[list(combo)]
+        X = sm.add_constant(X)
+        y = data['Age']
+        model = sm.OLS(y, X).fit()
+        r2_adj = adjusted_r2(model.rsquared, X.shape[0], X.shape[1] - 1)
+        results_list.append({'num_features': k, 'features': combo, 'r2_adj': r2_adj})
 
-# Sort results by best adjusted R-squared
-results.sort(key=lambda x: x[1], reverse=True)
+# Convertir les résultats en DataFrame
+results_df = pd.DataFrame(results_list)
 
-# Plotting the best R squared for each number of features
-plt.figure(figsize=(10, 6))
-for k in range(1, 5):
-    best_adj_r_squared = max([r[1] for r in results if len(r[0]) == k])
-    plt.bar(k, best_adj_r_squared)
+# Trouver le meilleur modèle pour chaque nombre de caractéristiques
+best_models = results_df.loc[results_df.groupby('num_features')['r2_adj'].idxmax()]
 
-plt.xlabel('Number of Features')
-plt.ylabel('Adjusted R²')
-plt.title('Best Adjusted R² for Each Number of Features')
-plt.xticks([1, 2, 3, 4])
-plt.show()
+# Afficher les meilleurs modèles
+print(best_models)
 
-# Output the best overall model
-best_overall = results[0]
-print("Best model:", best_overall[0])
-print("Adjusted R² of best model:", best_overall[1])
+# Palette de couleurs
+colors = ['#F7B267', '#F79D65', '#F4845F', '#F27059']
+
+# Tracer l'histogramme de R² ajusté en fonction du nombre de caractéristiques
+fig = go.Figure()
+
+fig.add_trace(go.Bar(
+    x=best_models['num_features'],
+    y=best_models['r2_adj'],
+    text=best_models['r2_adj'].round(2),
+    textposition='outside',
+    marker_color=colors[:len(best_models)],
+    name='R² ajusté'
+))
+
+# Personnaliser le graphique
+fig.update_layout(
+    title='R² ajusté en fonction du nombre de caractéristiques',
+    xaxis=dict(title='Nombre de caractéristiques'),
+    yaxis=dict(title='R² ajusté'),
+    showlegend=False
+)
+
+# Afficher le graphique
+fig.show()
